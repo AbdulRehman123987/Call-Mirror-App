@@ -93,9 +93,11 @@ export function PictureInPicture({
             <div className="h-full w-full flex items-center justify-center bg-gray-800">
               <div className="text-center">
                 <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-bold mx-auto mb-2">
-                  {callState.contact?.name.charAt(0).toUpperCase()}
+                  {callState.contact?.fullName.charAt(0).toUpperCase()}
                 </div>
-                <p className="text-white text-sm">{callState.contact?.name}</p>
+                <p className="text-white text-sm">
+                  {callState.contact?.fullName}
+                </p>
               </div>
             </div>
           )}
@@ -136,7 +138,7 @@ export function PictureInPicture({
             {/* Contact Name */}
             <div className="absolute bottom-2 left-2 right-2">
               <p className="text-white text-sm font-medium truncate">
-                {callState.contact?.name}
+                {callState.contact?.fullName}
               </p>
             </div>
           </div>
