@@ -89,8 +89,23 @@ class SocketService {
     this.socket?.on("webrtc:signal", callback);
   }
 
-  initiateCall(contactId: string, type: "audio" | "video"): void {
-    this.socket?.emit("call:initiate", { contactId, type });
+  // initiateCall(contactId: string, type: "audio" | "video"): void {
+  //   this.socket?.emit("call:initiate", { contactId, type });
+  // }
+
+  initiateCall(contactId: string, type: "audio" | "video"): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.socket?.emit("call:initiate", { contactId, type });
+
+      this.socket?.once("call:initiated", (data: { callId: string }) => {
+        console.log("Socket: call:initiated", data);
+        resolve(data.callId); // ✅ this is the one to use!
+      });
+
+      setTimeout(() => {
+        reject(new Error("Timeout waiting for call:initiated"));
+      }, 5000);
+    });
   }
 
   acceptCall(callId: string): void {

@@ -1,314 +1,12 @@
-// "use client";
-
-// import React, { createContext, useContext, useEffect, useState } from "react";
-// import { socketService, Contact, IncomingCall } from "@/lib/socket";
-// import { webrtcService } from "@/lib/webrtc";
-// import { notificationService } from "@/lib/notifications";
-// import { generateCallId } from "@/lib/utils";
-// import { useAuth } from "./AuthContext";
-
-// export interface CallState {
-//   callId: string | null;
-//   isActive: boolean;
-//   isIncoming: boolean;
-//   contact: Contact | null;
-//   type: "audio" | "video" | null;
-//   status: "connecting" | "connected" | "ended" | "declined";
-//   localStream: MediaStream | null;
-//   remoteStream: MediaStream | null;
-//   isAudioEnabled: boolean;
-//   isVideoEnabled: boolean;
-//   isScreenSharing: boolean;
-//   duration: number;
-// }
-
-// interface CallContextType {
-//   callState: CallState;
-//   incomingCall: IncomingCall | null;
-//   initiateCall: (contact: Contact, type: "audio" | "video") => void;
-//   acceptCall: () => void;
-//   declineCall: () => void;
-//   endCall: () => void;
-//   toggleAudio: () => void;
-//   toggleVideo: () => void;
-//   toggleScreenShare: () => void;
-// }
-
-// const initialCallState: CallState = {
-//   callId: null,
-//   isActive: false,
-//   isIncoming: false,
-//   contact: null,
-//   type: null,
-//   status: "ended",
-//   localStream: null,
-//   remoteStream: null,
-//   isAudioEnabled: true,
-//   isVideoEnabled: true,
-//   isScreenSharing: false,
-//   duration: 0,
-// };
-
-// const CallContext = createContext<CallContextType | undefined>(undefined);
-
-// export function CallProvider({ children }: { children: React.ReactNode }) {
-//   const { user } = useAuth();
-//   const [callState, setCallState] = useState<CallState>(initialCallState);
-//   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
-//   const [durationTimer, setDurationTimer] = useState<NodeJS.Timeout | null>(
-//     null
-//   );
-
-//   useEffect(() => {
-//     if (user) {
-//       initializeSocket();
-//       initializeNotifications();
-//     }
-
-//     return () => {
-//       socketService.disconnect();
-//       if (durationTimer) {
-//         clearInterval(durationTimer);
-//       }
-//     };
-//   }, [user]);
-
-//   const initializeSocket = async () => {
-//     try {
-//       await socketService.connect();
-//       setupSocketListeners();
-//     } catch (error) {
-//       console.error("Socket connection failed:", error);
-//     }
-//   };
-
-//   const initializeNotifications = async () => {
-//     await notificationService.initialize();
-//     const hasPermission = await notificationService.requestPermission();
-//     if (hasPermission) {
-//       await notificationService.subscribeToPush();
-//     }
-//   };
-
-//   const setupSocketListeners = () => {
-//     socketService.onIncomingCall((call) => {
-//       console.log("Incoming call received:", call);
-//       setIncomingCall(call);
-//       notificationService.showIncomingCallNotification(
-//         call.from.fullName,
-//         call.callId
-//       );
-
-//       // Auto-dismiss after 30 seconds
-//       const timeoutCallId = call.callId;
-
-//       setTimeout(() => {
-//         setIncomingCall((currentCall) =>
-//           currentCall?.callId === timeoutCallId ? null : currentCall
-//         );
-//       }, 30000);
-//     });
-//     socketService.onIncomingCall((call) => {
-//       console.log("Incoming call received:", call);
-//       setIncomingCall(call);
-//       notificationService.showIncomingCallNotification(
-//         call.from.fullName,
-//         call.callId
-//       );
-
-//       // Auto-dismiss after 30 seconds
-//       setTimeout(() => {
-//         if (incomingCall?.callId === call.callId) {
-//           setIncomingCall(null);
-//         }
-//       }, 30000);
-//     });
-
-//     socketService.onCallAccepted((data) => {
-//       if (callState.callId === data.callId) {
-//         startCall(false);
-//       }
-//     });
-
-//     socketService.onCallDeclined((data) => {
-//       if (callState.callId === data.callId) {
-//         setCallState((prev) => ({ ...prev, status: "declined" }));
-//         setTimeout(() => resetCallState(), 2000);
-//       }
-//     });
-
-//     socketService.onCallEnded((data) => {
-//       if (callState.callId === data.callId) {
-//         endCall();
-//       }
-//     });
-
-//     socketService.onSignalingMessage((data) => {
-//       if (callState.callId === data.callId) {
-//         webrtcService.handleSignalingMessage(data.signal);
-//       } else {
-//         console.warn("Received signaling message for unmatched callId", {
-//           expected: callState.callId,
-//           received: data.callId,
-//         });
-//       }
-//     });
-
-//     socketService.onSignalingMessage((data) => {
-//       if (callState.callId === data.callId) {
-//         webrtcService.handleSignalingMessage(data.signal);
-//       }
-//     });
-//   };
-
-//   const initiateCall = (contact: Contact, type: "audio" | "video") => {
-//     const callId = generateCallId();
-
-//     setCallState({
-//       ...initialCallState,
-//       callId,
-//       isActive: true,
-//       isIncoming: false,
-//       contact,
-//       type,
-//       status: "connecting",
-//     });
-
-//     socketService.initiateCall(contact.id, type);
-//     startCall(true);
-//   };
-
-//   const acceptCall = () => {
-//     if (!incomingCall) return;
-
-//     setCallState({
-//       ...initialCallState,
-//       callId: incomingCall.callId,
-//       isActive: true,
-//       isIncoming: true,
-//       contact: incomingCall.from,
-//       type: incomingCall.type,
-//       status: "connecting",
-//     });
-
-//     socketService.acceptCall(incomingCall.callId);
-//     setIncomingCall(null);
-//     startCall(false);
-//   };
-
-//   const declineCall = () => {
-//     if (!incomingCall) return;
-
-//     socketService.declineCall(incomingCall.callId);
-//     setIncomingCall(null);
-//   };
-
-//   const startCall = async (isInitiator: boolean) => {
-//     try {
-//       await webrtcService.initializeCall({
-//         callId: callState.callId!,
-//         isInitiator,
-//         onStream: (remoteStream) => {
-//           setCallState((prev) => ({
-//             ...prev,
-//             remoteStream,
-//             status: "connected",
-//           }));
-//           startDurationTimer();
-//         },
-//         onClose: () => {
-//           endCall();
-//         },
-//         onError: (error) => {
-//           console.error("WebRTC error:", error);
-//           endCall();
-//         },
-//       });
-
-//       const localStream = webrtcService.getLocalStream();
-//       setCallState((prev) => ({ ...prev, localStream }));
-//     } catch (error) {
-//       console.error("Failed to start call:", error);
-//       endCall();
-//     }
-//   };
-
-//   const endCall = () => {
-//     webrtcService.endCall();
-//     if (durationTimer) {
-//       clearInterval(durationTimer);
-//       setDurationTimer(null);
-//     }
-//     resetCallState();
-//   };
-
-//   const toggleAudio = () => {
-//     const newState = !callState.isAudioEnabled;
-//     webrtcService.toggleAudio(newState);
-//     setCallState((prev) => ({ ...prev, isAudioEnabled: newState }));
-//   };
-
-//   const toggleVideo = () => {
-//     const newState = !callState.isVideoEnabled;
-//     webrtcService.toggleVideo(newState);
-//     setCallState((prev) => ({ ...prev, isVideoEnabled: newState }));
-//   };
-
-//   const toggleScreenShare = async () => {
-//     try {
-//       if (callState.isScreenSharing) {
-//         await webrtcService.stopScreenShare();
-//         setCallState((prev) => ({ ...prev, isScreenSharing: false }));
-//       } else {
-//         await webrtcService.initializeScreenShare();
-//         setCallState((prev) => ({ ...prev, isScreenSharing: true }));
-//       }
-//     } catch (error) {
-//       console.error("Screen share toggle failed:", error);
-//     }
-//   };
-
-//   const startDurationTimer = () => {
-//     const timer = setInterval(() => {
-//       setCallState((prev) => ({ ...prev, duration: prev.duration + 1 }));
-//     }, 1000);
-//     setDurationTimer(timer);
-//   };
-
-//   const resetCallState = () => {
-//     setCallState(initialCallState);
-//   };
-
-//   return (
-//     <CallContext.Provider
-//       value={{
-//         callState,
-//         incomingCall,
-//         initiateCall,
-//         acceptCall,
-//         declineCall,
-//         endCall,
-//         toggleAudio,
-//         toggleVideo,
-//         toggleScreenShare,
-//       }}
-//     >
-//       {children}
-//     </CallContext.Provider>
-//   );
-// }
-
-// export function useCall() {
-//   const context = useContext(CallContext);
-//   if (context === undefined) {
-//     throw new Error("useCall must be used within a CallProvider");
-//   }
-//   return context;
-// }
-
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from "react";
 import { socketService, Contact, IncomingCall } from "@/lib/socket";
 import { webrtcService } from "@/lib/webrtc";
 import { notificationService } from "@/lib/notifications";
@@ -366,6 +64,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [durationTimer, setDurationTimer] = useState<NodeJS.Timeout | null>(
     null
   );
+
+  const callIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -434,11 +134,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // socketService.onCallAccepted((data) => {
-    //   if (callState.callId === data.callId) {
-    //     startCall(false);
-    //   }
-    // });
     socketService.onCallAccepted((data) => {
       console.log("Call accepted for callId:", data.callId);
 
@@ -461,33 +156,84 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // socketService.onSignalingMessage((data) => {
+    //   console.log("callstate id : ", callState.callId);
+    //   console.log("data id : ", data.callId);
+
+    //   if (callState.callId === data.callId) {
+    //     webrtcService.handleSignalingMessage(data.signal);
+    //   } else {
+    //     console.warn("Received signaling message for unmatched callId", {
+    //       expected: callIdRef.current,
+    //       received: data.callId,
+    //     });
+    //   }
+    // });
+
     socketService.onSignalingMessage((data) => {
-      if (callState.callId === data.callId) {
+      console.log("Received signal. Expected callId:", callState.callId);
+      console.log("Received signal. Expected callId 2:", callIdRef.current);
+      console.log("Received callId:", data.callId);
+
+      if (
+        callState.callId === data.callId ||
+        callIdRef.current === data.callId
+      ) {
         webrtcService.handleSignalingMessage(data.signal);
       } else {
-        console.warn("Received signaling message for unmatched callId", {
+        console.warn("⚠️ Received signaling message for unmatched callId", {
           expected: callState.callId,
+          ref: callIdRef.current,
           received: data.callId,
         });
       }
     });
   };
 
-  const initiateCall = (contact: Contact, type: "audio" | "video") => {
-    const callId = generateCallId();
+  // const initiateCall = async (contact: Contact, type: "audio" | "video") => {
+  //   // On incomming call get call id
+  //   const callId = await generateCallId();
 
-    setCallState({
-      ...initialCallState,
-      callId,
-      isActive: true,
-      isIncoming: false,
-      contact,
-      type,
-      status: "connecting",
-    });
+  //   console.log("Initiate call call id", callId);
+  //   callIdRef.current = callId;
+  //   if (callId != null) {
+  //     setCallState({
+  //       ...initialCallState,
+  //       callId: callIdRef.current,
+  //       isActive: true,
+  //       isIncoming: false,
+  //       contact,
+  //       type,
+  //       status: "connecting",
+  //     });
+  //   }
 
-    socketService.initiateCall(contact.id, type);
-    startCall(true);
+  //   console.log("Initiate call check call state", callState);
+
+  //   socketService.initiateCall(contact.id, type);
+  //   // startCall(true);
+  //   startCall(true, callId);
+  // };
+
+  const initiateCall = async (contact: Contact, type: "audio" | "video") => {
+    try {
+      const callId = await socketService.initiateCall(contact.id, type);
+      callIdRef.current = callId;
+
+      setCallState({
+        ...initialCallState,
+        callId, // ✅ use server-generated ID
+        isActive: true,
+        isIncoming: false,
+        contact,
+        type,
+        status: "connecting",
+      });
+
+      startCall(true, callId); // ✅ correct usage
+    } catch (err) {
+      console.error("Failed to initiate call:", err);
+    }
   };
 
   const declineCall = () => {
@@ -497,31 +243,62 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIncomingCall(null);
   };
 
+  // const acceptCall = () => {
+  //   if (!incomingCall) return;
+
+  //   const { callId, from, type } = incomingCall;
+
+  //   console.log("in accept call function incomming call ", incomingCall);
+  //   callIdRef.current = callId;
+  //   setCallState({
+  //     ...initialCallState,
+  //     callId: callId,
+  //     isActive: true,
+  //     isIncoming: true,
+  //     contact: from,
+  //     type,
+  //     status: "connected",
+  //   });
+
+  //   socketService.acceptCall(callId);
+
+  //   // ✅ Pass the callId explicitly to avoid stale state issue
+  //   startCall(true, callId);
+  //   setIncomingCall(null);
+  // };
+
   const acceptCall = () => {
     if (!incomingCall) return;
 
     const { callId, from, type } = incomingCall;
 
+    console.log("In accept call - incoming call:", incomingCall);
+
+    // ✅ Use incomingCall.callId directly and immediately
+    callIdRef.current = callId;
+
     setCallState({
       ...initialCallState,
-      callId,
+      callId, // ✅ This is the correct one
       isActive: true,
       isIncoming: true,
       contact: from,
       type,
-      status: "connecting",
+      status: "connected",
     });
 
     socketService.acceptCall(callId);
-    setIncomingCall(null);
 
-    // ✅ Pass the callId explicitly to avoid stale state issue
-    startCall(false, callId);
+    // ✅ Use the passed callId, not potentially stale callState.callId
+    startCall(true, callId);
+
+    setIncomingCall(null);
   };
 
   const startCall = async (isInitiator: boolean, passedCallId?: string) => {
     console.log("Call State", callState);
-    const activeCallId = passedCallId || callState.callId;
+    // const activeCallId = callState.callId;
+    const activeCallId = passedCallId;
     if (!activeCallId) {
       console.error("❌ No call ID available to start the call.");
       return;
