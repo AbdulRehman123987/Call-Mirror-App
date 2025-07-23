@@ -434,9 +434,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // socketService.onCallAccepted((data) => {
+    //   if (callState.callId === data.callId) {
+    //     startCall(false);
+    //   }
+    // });
     socketService.onCallAccepted((data) => {
+      console.log("Call accepted for callId:", data.callId);
+
       if (callState.callId === data.callId) {
-        startCall(false);
+        // ✅ Pass callId explicitly to avoid stale reference
+        startCall(false, data.callId);
       }
     });
 
@@ -482,24 +490,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     startCall(true);
   };
 
-  const acceptCall = () => {
-    if (!incomingCall) return;
-
-    setCallState({
-      ...initialCallState,
-      callId: incomingCall.callId,
-      isActive: true,
-      isIncoming: true,
-      contact: incomingCall.from,
-      type: incomingCall.type,
-      status: "connected",
-    });
-
-    socketService.acceptCall(incomingCall.callId);
-    setIncomingCall(null);
-    startCall(false);
-  };
-
   const declineCall = () => {
     if (!incomingCall) return;
 
@@ -507,16 +497,47 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIncomingCall(null);
   };
 
-  const startCall = async (isInitiator: boolean) => {
+  const acceptCall = () => {
+    if (!incomingCall) return;
+
+    const { callId, from, type } = incomingCall;
+
+    setCallState({
+      ...initialCallState,
+      callId,
+      isActive: true,
+      isIncoming: true,
+      contact: from,
+      type,
+      status: "connecting",
+    });
+
+    socketService.acceptCall(callId);
+    setIncomingCall(null);
+
+    // ✅ Pass the callId explicitly to avoid stale state issue
+    startCall(false, callId);
+  };
+
+  const startCall = async (isInitiator: boolean, passedCallId?: string) => {
+    console.log("Call State", callState);
+    const activeCallId = passedCallId || callState.callId;
+    if (!activeCallId) {
+      console.error("❌ No call ID available to start the call.");
+      return;
+    }
+
     try {
+      console.log("Starting call with ID:", activeCallId);
+
       await webrtcService.initializeCall({
-        callId: callState.callId!,
+        callId: activeCallId,
         isInitiator,
         onStream: (remoteStream) => {
           setCallState((prev) => ({
             ...prev,
             remoteStream,
-            status: "connected",
+            status: "connecting", // or 'connected' if you want to switch it right away
           }));
           startDurationTimer();
         },
@@ -530,7 +551,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
 
       const localStream = webrtcService.getLocalStream();
-      setCallState((prev) => ({ ...prev, localStream }));
+      setCallState((prev) => ({
+        ...prev,
+        localStream,
+      }));
     } catch (error) {
       console.error("Failed to start call:", error);
       endCall();
