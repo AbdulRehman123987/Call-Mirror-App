@@ -39,7 +39,6 @@ class NotificationService {
         applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
       });
 
-      // Send subscription to server
       await this.sendSubscriptionToServer(subscription);
       return subscription;
     } catch (error) {
@@ -50,20 +49,6 @@ class NotificationService {
 
   showIncomingCallNotification(callerName: string, callId: string): void {
     if ("Notification" in window && Notification.permission === "granted") {
-      // const notification = new Notification(
-      //   `Incoming call from ${callerName}`,
-      //   {
-      //     icon: "/icons/call-icon.png",
-      //     badge: "/icons/call-badge.png",
-      //     tag: `call-${callId}`,
-      //     requireInteraction: true,
-      //     actions: [
-      //       { action: "accept", title: "Accept" },
-      //       { action: "decline", title: "Decline" },
-      //     ],
-      //   }
-      // );
-
       const notification = new Notification(
         `Incoming call from ${callerName}`,
         {
@@ -71,14 +56,11 @@ class NotificationService {
           badge: "/icons/call-badge.png",
           tag: `call-${callId}`,
           requireInteraction: true,
-          // ❌ Don't include `actions` here — browser will throw an error
         }
       );
-
-      // Auto-dismiss after 30 seconds
       setTimeout(() => {
         notification.close();
-      }, 30000);
+      }, 2000);
     }
   }
 
