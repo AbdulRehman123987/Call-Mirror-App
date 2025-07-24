@@ -13,22 +13,25 @@ export function IncomingCallModal() {
 
   useEffect(() => {
     if (incomingCall) {
-      // Create and play ringtone
       const audio = new Audio("/sounds/ringtone.mp3");
       audio.loop = true;
-      audio.play().catch(console.error);
       setRingtoneAudio(audio);
+
+      const tryPlay = () => {
+        audio
+          .play()
+          .catch((err) => console.warn("Autoplay still blocked:", err));
+        document.removeEventListener("click", tryPlay);
+      };
+
+      document.addEventListener("click", tryPlay);
 
       return () => {
         audio.pause();
         audio.currentTime = 0;
-      };
-    } else {
-      if (ringtoneAudio) {
-        ringtoneAudio.pause();
-        ringtoneAudio.currentTime = 0;
         setRingtoneAudio(null);
-      }
+        document.removeEventListener("click", tryPlay);
+      };
     }
   }, [incomingCall]);
 
