@@ -86,12 +86,8 @@ class SocketService {
   }
 
   onSignalingMessage(callback: (data: any) => void): void {
-    this.socket?.on("webrtc:signal", callback);
+    this.socket?.on("call:signal", callback);
   }
-
-  // initiateCall(contactId: string, type: "audio" | "video"): void {
-  //   this.socket?.emit("call:initiate", { contactId, type });
-  // }
 
   initiateCall(contactId: string, type: "audio" | "video"): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -99,7 +95,7 @@ class SocketService {
 
       this.socket?.once("call:initiated", (data: { callId: string }) => {
         console.log("Socket: call:initiated", data);
-        resolve(data.callId); // ✅ this is the one to use!
+        resolve(data.callId);
       });
 
       setTimeout(() => {
@@ -120,8 +116,20 @@ class SocketService {
     this.socket?.emit("call:end", { callId });
   }
 
+  sendCallInitiated(callId: string): void {
+    this.socket?.emit("call:initiated", { callId });
+  }
+
   sendSignalingMessage(callId: string, signal: any): void {
-    this.socket?.emit("webrtc:signal", { callId, signal });
+    this.socket?.emit("call:signal", {
+      callId,
+      signal,
+      from: this.getSocketId(),
+    });
+  }
+
+  getSocketId(): string | null {
+    return this.socket?.id ?? null;
   }
 
   private setupEventHandlers(): void {

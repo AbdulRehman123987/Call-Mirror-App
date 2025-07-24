@@ -15,9 +15,6 @@ class WebRTCService {
   private callId: string | null = null;
 
   async initializeCall(config: WebRTCConfig): Promise<void> {
-    console.log("CONFIG", config);
-    console.log("Config call id ", config.callId);
-    console.log("Creating peer. Initiator?", config.isInitiator);
     this.callId = config.callId;
 
     try {
@@ -32,7 +29,6 @@ class WebRTCService {
         audio: available.audio,
       });
 
-      // Create peer connection
       this.peer = new SimplePeer({
         initiator: config.isInitiator,
         trickle: false,
@@ -44,8 +40,6 @@ class WebRTCService {
           ],
         },
       });
-
-      console.log("This peer", this.peer);
 
       this.setupPeerEvents(config);
     } catch (error) {
@@ -70,17 +64,15 @@ class WebRTCService {
       });
 
       if (this.peer && this.localStream) {
-        // Replace video track with screen share
         const videoTrack = screenStream.getVideoTracks()[0];
         const sender = this.peer._pc
           ?.getSenders()
-          .find((s) => s.track && s.track.kind === "video");
+          .find((s) => s.track?.kind === "video");
 
         if (sender) {
           await sender.replaceTrack(videoTrack);
         }
 
-        // Handle screen share end
         videoTrack.onended = () => {
           this.stopScreenShare();
         };
@@ -97,7 +89,7 @@ class WebRTCService {
       const videoTrack = this.localStream.getVideoTracks()[0];
       const sender = this.peer._pc
         ?.getSenders()
-        .find((s) => s.track && s.track.kind === "video");
+        .find((s) => s.track?.kind === "video");
 
       if (sender && videoTrack) {
         await sender.replaceTrack(videoTrack);
@@ -106,24 +98,44 @@ class WebRTCService {
   }
 
   toggleAudio(enabled: boolean): void {
-    if (this.localStream) {
-      this.localStream.getAudioTracks().forEach((track) => {
-        track.enabled = enabled;
-      });
-    }
+    this.localStream?.getAudioTracks().forEach((track) => {
+      track.enabled = enabled;
+    });
   }
 
   toggleVideo(enabled: boolean): void {
-    if (this.localStream) {
-      this.localStream.getVideoTracks().forEach((track) => {
-        track.enabled = enabled;
-      });
-    }
+    this.localStream?.getVideoTracks().forEach((track) => {
+      track.enabled = enabled;
+    });
   }
 
-  handleSignalingMessage(signal: any): void {
-    if (this.peer && !this.peer.destroyed) {
+  handleSignalingMessage(signal: any, from: string): void {
+    const selfId = socketService.getSocketId();
+
+    console.log("📨 Received signaling message", { signal, from });
+
+    if (from === selfId) {
+      console.log("🔁 Ignored own signal");
+      return;
+    }
+
+    if (!this.peer || this.peer.destroyed) {
+      console.warn("❌ No active peer connection");
+      return;
+    }
+
+    const signalingState = this.peer._pc?.signalingState;
+    console.log("📡 Received signal", signal.type, "in state:", signalingState);
+
+    if (signal.type === "answer" && signalingState === "stable") {
+      console.warn("⚠️ Skipping redundant answer in stable state");
+      return;
+    }
+
+    try {
       this.peer.signal(signal);
+    } catch (err) {
+      console.error("❌ Error applying signal", err);
     }
   }
 
@@ -152,16 +164,13 @@ class WebRTCService {
     if (!this.peer) return;
 
     this.peer.on("signal", (signal) => {
-      if (!this.callId) {
-        console.warn("❌ No callId set when trying to send signal", signal);
-        return;
-      }
-
-      console.log("✅ Sending signal for callId:", this.callId);
+      if (!this.callId) return;
+      console.log("✅ Emitting signal for call:", this.callId);
       socketService.sendSignalingMessage(this.callId, signal);
     });
 
     this.peer.on("stream", (remoteStream) => {
+      console.log("✅ Got remote stream");
       config.onStream?.(remoteStream);
     });
 
@@ -177,10 +186,8 @@ class WebRTCService {
   }
 
   private cleanup(): void {
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
-      this.localStream = null;
-    }
+    this.localStream?.getTracks().forEach((track) => track.stop());
+    this.localStream = null;
     this.peer = null;
     this.callId = null;
   }
