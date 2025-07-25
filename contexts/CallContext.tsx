@@ -157,6 +157,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const selfId = socketService.getSocketId();
       const { callId, signal, from } = data;
 
+      //console.log(data);
+
       if (callId !== callState.callId && callId !== callIdRef.current) {
         console.warn("⚠️ Received signaling message for unmatched callId", {
           expected: callState.callId,
@@ -242,6 +244,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         callId: activeCallId,
         isInitiator,
         onStream: (remoteStream) => {
+          console.log(
+            "start call remote strema",
+            remoteStream.getAudioTracks()
+          );
           setCallState((prev) => ({
             ...prev,
             remoteStream,
@@ -258,7 +264,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      const localStream = webrtcService.getLocalStream();
+      const localStream = await webrtcService.getLocalStream();
       setCallState((prev) => ({
         ...prev,
         localStream,

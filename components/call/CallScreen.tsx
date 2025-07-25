@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef } from "react";
 import {
-  Phone,
   PhoneOff,
   Mic,
   MicOff,
@@ -21,6 +20,7 @@ export function CallScreen() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null); // ✅ Added for audio calls
 
   useEffect(() => {
     if (localVideoRef.current && callState.localStream) {
@@ -34,21 +34,56 @@ export function CallScreen() {
     }
   }, [callState.remoteStream]);
 
+  useEffect(() => {
+    if (
+      callState.remoteStream &&
+      callState.type === "audio" &&
+      remoteAudioRef.current
+    ) {
+      remoteAudioRef.current.srcObject = callState.remoteStream;
+      remoteAudioRef.current
+        .play()
+        .catch((err) => console.warn("🔇 Could not autoplay audio:", err));
+    }
+  }, [callState.remoteStream, callState.type]);
+
   if (!callState.isActive) {
     return null;
   }
 
   return (
     <div className="fixed inset-0 bg-gray-900 z-50">
-      {/* Remote Video */}
+      {/* 🔊 Hidden Audio Element for Voice Call */}
+      <audio ref={remoteAudioRef} autoPlay playsInline hidden />
+
+      {/* Remote Video or Fallback UI */}
       <div className="relative h-full w-full">
         {callState.remoteStream ? (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="h-full w-full object-cover"
-          />
+          callState.type === "audio" ? (
+            // No visual for audio-only call (audio plays in background)
+            <div className="h-full w-full flex items-center justify-center bg-gray-800">
+              <div className="text-center">
+                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">
+                  {callState.contact?.fullName.charAt(0).toUpperCase()}
+                </div>
+                <h2 className="text-2xl font-semibold text-white mb-2">
+                  {callState.contact?.fullName}
+                </h2>
+                <p className="text-gray-300">
+                  {callState.status === "connecting"
+                    ? "Connecting..."
+                    : "Connected"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="h-full w-full object-cover"
+            />
+          )
         ) : (
           <div className="h-full w-full flex items-center justify-center bg-gray-800">
             <div className="text-center">

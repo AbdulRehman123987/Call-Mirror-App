@@ -132,6 +132,20 @@ class SocketService {
     return this.socket?.id ?? null;
   }
 
+  requestTurnCredentials(): Promise<RTCIceServer[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) return reject("Socket not connected");
+
+      this.socket.emit("turn:request");
+
+      this.socket.once("turn:credentials", (iceServers: RTCIceServer[]) => {
+        resolve(iceServers);
+      });
+
+      setTimeout(() => reject("Timeout getting TURN credentials"), 5000);
+    });
+  }
+
   private setupEventHandlers(): void {
     if (!this.socket) return;
 

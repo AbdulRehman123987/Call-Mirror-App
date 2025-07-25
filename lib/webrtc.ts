@@ -14,6 +14,47 @@ class WebRTCService {
   private localStream: MediaStream | null = null;
   private callId: string | null = null;
 
+  // async getLocalStream(
+  //   audio = true
+  //   // video = true
+  // ): Promise<MediaStream | null> {
+  //   try {
+  //     const stream = await navigator.mediaDevices.getUserMedia({
+  //       audio,
+  //       // video,
+  //     });
+  //     return stream;
+  //   } catch (err: any) {
+  //     if (err.name === "NotFoundError") {
+  //       console.error("🚫 No media devices found (camera/mic not available)");
+  //     } else if (err.name === "NotAllowedError") {
+  //       console.error("🔒 User denied permissions to media devices");
+  //     } else {
+  //       console.error("❌ Error accessing media devices:", err);
+  //     }
+  //     return null;
+  //   }
+  // }
+
+  async getLocalStream(audio: boolean): Promise<MediaStream | null> {
+    if (!audio) return null;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioTrack = stream.getAudioTracks()[0];
+
+      if (audioTrack && audioTrack.readyState === "ended") {
+        console.warn("🚫 Audio track ended immediately. Retrying...");
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      return stream;
+    } catch (err) {
+      console.error("🎙️ Failed to get local audio stream:", err);
+      return null;
+    }
+  }
+
   async initializeCall(config: WebRTCConfig): Promise<void> {
     this.callId = config.callId;
 
@@ -21,35 +62,75 @@ class WebRTCService {
       const available = await this.hasMediaDevices();
 
       if (!available.audio && !available.video) {
-        throw new Error("No audio or video devices found");
+        throw new Error("No audio devices found");
       }
 
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: available.video,
-        audio: available.audio,
+      this.localStream = await this.getLocalStream(
+        available.audio
+        // available.video
+      );
+
+      console.log(
+        "WebRtc initialize call local stream console",
+        this.localStream
+      );
+
+      console.log(
+        "web rtc local stream Tracks:",
+        this.localStream?.getTracks()
+      );
+
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        console.log(devices);
       });
 
-      this.peer = new SimplePeer({
-        initiator: config.isInitiator,
-        trickle: false,
-        stream: this.localStream,
-        config: {
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-          ],
-        },
-      });
+      if (!this.localStream) {
+        throw new Error("Local stream is not initialized");
+      }
 
-      this.setupPeerEvents(config);
+      console.log("LOCAL STREAM ", this.localStream);
+
+      socketService.requestTurnCredentials().then((iceServers) => {
+        console.log("🔧 Using dynamic ICE servers", iceServers);
+
+        // this.peer = new SimplePeer({
+        //   initiator: config.isInitiator,
+        //   trickle: false,
+        //   stream: this.localStream!,
+        //   config: { iceServers },
+        // });
+
+        // this.setupPeerEvents(config);
+
+        console.log("Local stream", this.localStream);
+
+        setTimeout(() => {
+          this.peer = new SimplePeer({
+            initiator: config.isInitiator,
+            trickle: false,
+            stream: this.localStream!,
+            config: { iceServers },
+          });
+          this.setupPeerEvents(config);
+        }, 100);
+      });
     } catch (error) {
       config.onError?.(error as Error);
       throw error;
     }
   }
 
-  async hasMediaDevices(): Promise<{ audio: boolean; video: boolean }> {
+  // async hasMediaDevices(): Promise<{ audio: boolean; video: boolean }> {
+  //   const devices = await navigator.mediaDevices.enumerateDevices();
+  //   return {
+  //     audio: devices.some((d) => d.kind === "audioinput"),
+  //     video: devices.some((d) => d.kind === "videoinput"),
+  //   };
+  // }
+
+  async hasMediaDevices() {
     const devices = await navigator.mediaDevices.enumerateDevices();
+
     return {
       audio: devices.some((d) => d.kind === "audioinput"),
       video: devices.some((d) => d.kind === "videoinput"),
@@ -156,9 +237,9 @@ class WebRTCService {
     }
   }
 
-  getLocalStream(): MediaStream | null {
-    return this.localStream;
-  }
+  // getLocalStream(): MediaStream | null {
+  //   return this.localStream;
+  // }
 
   private setupPeerEvents(config: WebRTCConfig): void {
     if (!this.peer) return;
@@ -171,6 +252,7 @@ class WebRTCService {
 
     this.peer.on("stream", (remoteStream) => {
       console.log("✅ Got remote stream");
+      console.log("Remote stream audio track", remoteStream.getAudioTracks());
       config.onStream?.(remoteStream);
     });
 
